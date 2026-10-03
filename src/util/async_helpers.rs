@@ -8,11 +8,14 @@ struct CheckpointInner<T: Copy> {
     values: Mutex<Vec<Option<T>>>,
 }
 
+/// An instance of a checkpoint, this contains the methods for actually reaching the checkpoint,
+/// as well as submitting and retrieving the value(s)
 pub struct CheckpointInstance<T: Copy> {
     inner: Arc<CheckpointInner<T>>,
     id: usize,
 }
 
+/// The structure that allows creation of a checkpoint and the generation of instances
 pub struct Checkpoint<T: Copy> {
     inner: Arc<CheckpointInner<T>>,
     count: usize,
@@ -82,16 +85,18 @@ impl<T: Copy> Checkpoint<T> {
     }
 }
 
+/// Allows combining a [Vec] of [Future]s into a single future,
+/// primarily useful for getting the combined outputs of many threads
 pub struct CombinedFuture<T: Future> {
     main: Vec<std::pin::Pin<Box<T>>>,
     output: Vec<T::Output>,
     index: usize,
 }
 
-impl<T: Future> CombinedFuture<T> {
-    pub fn from(main: Vec<T>) -> CombinedFuture<T> {
+impl<T: Future> From<Vec<T>> for CombinedFuture<T> {
+    fn from(value: Vec<T>) -> Self {
         CombinedFuture {
-            main: main.into_iter().map(Box::pin).collect(),
+            main: value.into_iter().map(Box::pin).collect(),
             index: 0,
             output: Vec::new(),
         }

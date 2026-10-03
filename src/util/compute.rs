@@ -1,4 +1,3 @@
-use crate::util::async_helpers::CombinedFuture;
 use bytemuck::{NoUninit, Pod};
 use flume::bounded;
 use pollster::block_on;
@@ -151,11 +150,5 @@ impl ComputePipeline {
                 }
             })
             .collect()
-    }
-    pub fn finish_combined<T: Pod>(
-        &mut self,
-        reqs: &[Buffer],
-    ) -> CombinedFuture<impl Future<Output = Result<Vec<T>, ()>>> {
-        CombinedFuture::from(self.finish::<T>(reqs))
     }
 }
