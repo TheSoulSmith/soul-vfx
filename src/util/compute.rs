@@ -1,5 +1,4 @@
-use std::task::Poll::{Pending, Ready};
-
+use crate::util::async_helpers::CombinedFuture;
 use bytemuck::{NoUninit, Pod};
 use flume::bounded;
 use pollster::block_on;
@@ -158,47 +157,5 @@ impl ComputePipeline {
         reqs: &[Buffer],
     ) -> CombinedFuture<impl Future<Output = Result<Vec<T>, ()>>> {
         CombinedFuture::from(self.finish::<T>(reqs))
-    }
-}
-
-pub struct CombinedFuture<T: Future> {
-    main: Vec<std::pin::Pin<Box<T>>>,
-    output: Vec<T::Output>,
-    index: usize,
-}
-
-impl<T: Future> CombinedFuture<T> {
-    pub fn from(main: Vec<T>) -> CombinedFuture<T> {
-        CombinedFuture {
-            main: main.into_iter().map(Box::pin).collect(),
-            index: 0,
-            output: Vec::new(),
-        }
-    }
-}
-
-impl<T: Future> Future for CombinedFuture<T> {
-    type Output = Vec<T::Output>;
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        let this = unsafe { self.get_unchecked_mut() };
-        if this.index >= this.main.len() {
-            return Ready(std::mem::take(&mut this.output));
-        }
-
-        match this.main[this.index].as_mut().poll(cx) {
-            Ready(out) => {
-                this.index += 1;
-                this.output.push(out);
-                if this.index >= this.main.len() {
-                    Ready(std::mem::take(&mut this.output))
-                } else {
-                    Pending
-                }
-            }
-            Pending => Pending,
-        }
     }
 }

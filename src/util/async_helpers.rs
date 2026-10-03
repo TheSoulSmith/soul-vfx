@@ -1,4 +1,7 @@
-use std::sync::{Arc, Barrier, Mutex};
+use std::{
+    sync::{Arc, Barrier, Mutex},
+    task::Poll::{Pending, Ready},
+};
 
 struct CheckpointInner<T: Copy> {
     barrier: Barrier,
@@ -75,6 +78,48 @@ impl<T: Copy> Checkpoint<T> {
         CheckpointInstance {
             inner: Arc::clone(&self.inner),
             id,
+        }
+    }
+}
+
+pub struct CombinedFuture<T: Future> {
+    main: Vec<std::pin::Pin<Box<T>>>,
+    output: Vec<T::Output>,
+    index: usize,
+}
+
+impl<T: Future> CombinedFuture<T> {
+    pub fn from(main: Vec<T>) -> CombinedFuture<T> {
+        CombinedFuture {
+            main: main.into_iter().map(Box::pin).collect(),
+            index: 0,
+            output: Vec::new(),
+        }
+    }
+}
+
+impl<T: Future> Future for CombinedFuture<T> {
+    type Output = Vec<T::Output>;
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        let this = unsafe { self.get_unchecked_mut() };
+        if this.index >= this.main.len() {
+            return Ready(std::mem::take(&mut this.output));
+        }
+
+        match this.main[this.index].as_mut().poll(cx) {
+            Ready(out) => {
+                this.index += 1;
+                this.output.push(out);
+                if this.index >= this.main.len() {
+                    Ready(std::mem::take(&mut this.output))
+                } else {
+                    Pending
+                }
+            }
+            Pending => Pending,
         }
     }
 }
